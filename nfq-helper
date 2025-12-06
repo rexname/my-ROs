@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+name="nfq-helper"
+description="NFQueue domain matcher"
+command="/usr/local/bin/block_app.py"
+command_user="root"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/nfq.log"
+error_log="/var/log/nfq.log"
+depend() {
+    need net
+}
+start_pre() {
+    mkdir -p /var/log || true
+}
