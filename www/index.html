@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>my-ROs AppBlock</title>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .flow { background: #111; color: #0f0; padding: 12px; height: 200px; overflow: auto; font-family: monospace; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; }
+    .toggle { display:flex; align-items:center; justify-content:space-between; }
+    button { padding: 6px 10px; }
+  </style>
+</head>
+<body x-data="app()">
+  <h1>my-ROs AppBlock</h1>
+  <div class="grid">
+    <div class="card" x-for="item in apps" :key="item.name">
+      <div class="toggle">
+        <strong x-text="item.name"></strong>
+        <label>
+          <input type="checkbox" :checked="item.on" @change="toggleApp(item)"> on/off
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Realtime Flow</strong>
+      <span x-text="wsStatus"></span>
+    </div>
+    <div class="flow" x-ref="flowBox"></div>
+  </div>
+
+<script>
+function app() {
+  return {
+    apps: [
+      { name: 'YouTube', key: 'youtube', on: false },
+      { name: 'TikTok', key: 'tiktok', on: false },
+      { name: 'Spotify', key: 'spotify', on: false },
+    ],
+    ws: null,
+    wsStatus: 'disconnected',
+    init() { this.connectWS(); },
+    connectWS() {
+      const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+      this.ws = new WebSocket(url);
+      this.wsStatus = 'connecting';
+      this.ws.onopen = () => { this.wsStatus = 'connected'; };
+      this.ws.onmessage = (ev) => {
+        try {
+          const obj = JSON.parse(ev.data);
+          if (obj.type === 'flow' && obj.txt) this.appendFlow(obj.txt);
+        } catch {}
+      };
+      this.ws.onclose = () => { this.wsStatus = 'disconnected'; setTimeout(() => this.connectWS(), 1500); };
+      this.ws.onerror = () => { this.wsStatus = 'error'; };
+    },
+    appendFlow(txt) {
+      const box = this.$refs.flowBox;
+      const line = document.createElement('div');
+      const ts = new Date().toISOString();
+      line.textContent = `${ts} ${txt}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    },
+    async toggleApp(item) {
+      item.on = !item.on;
+      try {
+        const res = await fetch('/api/block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ app: item.key, on: item.on })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch (e) {
+        item.on = !item.on;
+        alert('Gagal update: ' + e.message);
+      }
+    }
+  };
+}
+</script>
+</body>
+</html>
