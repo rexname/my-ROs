@@ -2,6 +2,7 @@
 import re
 import time
 import subprocess
+import json
 from socket import AF_INET
 import nfqueue
 from scapy.all import IP, TCP, Raw
@@ -12,6 +13,34 @@ APPS = {
     "spotify": [r".*\.spotify\.com$", r".*\.scdn\.co$"],
 }
 REGEX = {k: [re.compile(p, re.I) for p in v] for k, v in APPS.items()}
+
+ON_CACHE = {}
+
+def app_enabled(app):
+    now = time.time()
+    ent = ON_CACHE.get(app)
+    if ent and now - ent[0] < 2.0:
+        return ent[1]
+    try:
+        out = subprocess.check_output(["nft", "-j", "list", "set", "inet", "myapp", f"block_{app}"])
+        j = json.loads(out)
+        enabled = False
+        for item in j.get("nftables", []):
+            setobj = item.get("set")
+            if setobj and "elem" in setobj:
+                for e in setobj["elem"]:
+                    concat = e.get("concat")
+                    if concat and len(concat) >= 2:
+                        ipdata = concat[0].get("data")
+                        svcdata = concat[1].get("data")
+                        if ipdata == "0.0.0.0" and int(svcdata) == 0:
+                            enabled = True
+                            break
+        ON_CACHE[app] = (now, enabled)
+        return enabled
+    except Exception:
+        ON_CACHE[app] = (now, False)
+        return False
 
 def match_app(host):
     for app, pats in REGEX.items():
@@ -96,7 +125,7 @@ def cb(payload):
         elif dport == 80 and data:
             host = extract_host_http(data)
         app = match_app(host) if host else None
-        if app:
+        if app and app_enabled(app):
             add_block(app, dst, dport)
             print(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {app} {host} {dst}:{dport}", flush=True)
     except Exception as e:
