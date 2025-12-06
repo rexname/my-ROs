@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+name="appblock"
+description="my-ROs Go web server"
+command="/usr/local/bin/myros"
+command_args=""
+command_user="root"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/appblock.log"
+error_log="/var/log/appblock.log"
+depend() {
+    need net
+}
+start_pre() {
+    mkdir -p /var/log || true
+}
